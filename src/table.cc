@@ -284,9 +284,68 @@ int Table::insert(unsigned int blkid, std::vector<struct iovec> &iov)
     return S_OK;
 }
 
-int Table::remove(unsigned int blkid, void *keybuf, unsigned int len) {}
+int Table::remove(unsigned int blkid, void *keybuf, unsigned int len)
+{
+    DataBlock data;
+    SuperBlock super;
+    data.setTable(this);
 
-int Table::update(unsigned int blkid, std::vector<struct iovec> &iov) {}
+    // 从buffer中借用
+    BufDesp *bd = kBuffer.borrow(name_.c_str(), blkid);
+    data.attach(bd->buffer);
+
+    // 先确定删除位置
+    unsigned short index = data.searchRecord(keybuf, len);
+    if (index < 0 || index >= data.getSlots()) { return ESRCH; }
+
+    data.deallocate(index);
+
+    DataHeader *header = reinterpret_cast<MetaHeader *>(data.buffer_);
+
+    if (header->freesize > BLOCK_SIZE / 2 && header->self != super.getMaxid()) {
+        DataBlock next;
+        BufDesp *bdn = kBuffer.borrow(name_.c_str(), header->next);
+        next.attach(bdn->buffer);
+        next.setTable(this);
+        if (next.getFreeSize() > BLOCK_SIZE / 2) {
+            // 移动next记录到data上
+            while (next.getSlots() > 0) {
+                Record record;
+                next.refslots(0, record);
+                data.copyRecord(record);
+                next.deallocate(0);
+            }
+            data.setNext(next.getNext());
+
+            data.shrink();
+            RelationInfo *info = this->info_;
+            unsigned int key = info->key;
+            DataType *type = info->fields[key].type;
+            data.reorder(type, key);
+        }
+        bdn->relref();
+    }
+
+    kBuffer.releaseBuf(bd); // 释放buffer
+    // 修改表头统计
+    bd = kBuffer.borrow(name_.c_str(), 0);
+    super.attach(bd->buffer);
+    super.setRecords(super.getRecords() - 1);
+    bd->relref();
+
+    return S_OK; // 删除成功
+}
+
+// int Table::update(unsigned int blkid, std::vector<struct iovec> &iov)
+// {
+//     DataBlock data;
+//     SuperBlock super;
+//     data.setTable(this);
+
+//     // 从buffer中借用
+//     BufDesp *bd = kBuffer.borrow(name_.c_str(), blkid);
+//     data.attach(bd->buffer);
+// }
 
 size_t Table::recordCount()
 {
