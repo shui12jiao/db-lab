@@ -355,7 +355,7 @@ int Table::update(unsigned int blkid, std::vector<struct iovec> &iov)
 }
 
 // btree搜索
-unsigned int Table::search(void *keybuf, unsigned int len) {}
+// unsigned int Table::search(void *keybuf, unsigned int len) {}
 
 size_t Table::recordCount()
 {
