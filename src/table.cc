@@ -336,16 +336,26 @@ int Table::remove(unsigned int blkid, void *keybuf, unsigned int len)
     return S_OK; // 删除成功
 }
 
-// int Table::update(unsigned int blkid, std::vector<struct iovec> &iov)
-// {
-//     DataBlock data;
-//     SuperBlock super;
-//     data.setTable(this);
+int Table::update(unsigned int blkid, std::vector<struct iovec> &iov)
+{
+    DataBlock data;
+    SuperBlock super;
+    data.setTable(this);
 
-//     // 从buffer中借用
-//     BufDesp *bd = kBuffer.borrow(name_.c_str(), blkid);
-//     data.attach(bd->buffer);
-// }
+    // 从buffer中借用
+    BufDesp *bd = kBuffer.borrow(name_.c_str(), blkid);
+    data.attach(bd->buffer);
+    // 尝试更新
+    bool success = data.updateRecord(iov);
+
+    kBuffer.releaseBuf(bd);
+
+    if (!success) { return S_FALSE; }
+    return S_OK;
+}
+
+// btree搜索
+unsigned int Table::search(void *keybuf, unsigned int len) {}
 
 size_t Table::recordCount()
 {

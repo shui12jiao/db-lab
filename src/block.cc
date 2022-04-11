@@ -409,11 +409,24 @@ DataBlock::insertRecord(std::vector<struct iovec> &iov)
     return std::pair<bool, unsigned short>(true, index);
 }
 
-// bool DataBlock::updateRecord(
-//     std::vector<struct iovec> &iov) //------------------TODO
-// {
-//     return false;
-// }
+bool DataBlock::updateRecord(std::vector<struct iovec> &iov)
+{
+    RelationInfo *info = table_->info_;
+    unsigned int key = info->key;
+    DataType *type = info->fields[key].type;
+
+    // 先确定删除位置
+    unsigned short index =
+        type->search(buffer_, key, iov[key].iov_base, iov[key].iov_len);
+
+    Record record;
+    if (index < getSlots()) {
+        this->deallocate(index);
+        this->insertRecord(iov);
+        return true;
+    }
+    return false;
+}
 
 bool DataBlock::copyRecord(Record &record)
 {
