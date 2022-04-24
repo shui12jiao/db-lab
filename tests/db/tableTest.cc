@@ -421,7 +421,7 @@ TEST_CASE("db/table.h")
         for (std::vector<long long>::iterator it = nids.begin();
              it != nids.end();
              ++it) {
-            iov[0].iov_base = &*it;
+            nid = *it;
             unsigned int blkid =
                 table.locate(iov[0].iov_base, (unsigned int) iov[0].iov_len);
             int ret = table.remove(

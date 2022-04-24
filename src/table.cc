@@ -302,29 +302,30 @@ int Table::remove(unsigned int blkid, void *keybuf, unsigned int len)
 
     DataHeader *header = reinterpret_cast<MetaHeader *>(data.buffer_);
 
-    if (header->freesize > BLOCK_SIZE / 2 && header->self != super.getMaxid()) {
-        DataBlock next;
-        BufDesp *bdn = kBuffer.borrow(name_.c_str(), header->next);
-        next.attach(bdn->buffer);
-        next.setTable(this);
-        if (next.getFreeSize() > BLOCK_SIZE / 2) {
-            // 移动next记录到data上
-            while (next.getSlots() > 0) {
-                Record record;
-                next.refslots(0, record);
-                data.copyRecord(record);
-                next.deallocate(0);
-            }
-            data.setNext(next.getNext());
+    // if (header->freesize > BLOCK_SIZE / 2 && header->self !=
+    // super.getMaxid()) {
+    //     DataBlock next;
+    //     BufDesp *bdn = kBuffer.borrow(name_.c_str(), header->next);
+    //     next.attach(bdn->buffer);
+    //     next.setTable(this);
+    //     if (next.getFreeSize() > BLOCK_SIZE / 2) {
+    //         // 移动next记录到data上
+    //         while (next.getSlots() > 0) {
+    //             Record record;
+    //             next.refslots(0, record);
+    //             data.copyRecord(record);
+    //             next.deallocate(0);
+    //         }
+    //         data.setNext(next.getNext());
 
-            data.shrink();
-            RelationInfo *info = this->info_;
-            unsigned int key = info->key;
-            DataType *type = info->fields[key].type;
-            data.reorder(type, key);
-        }
-        bdn->relref();
-    }
+    //         data.shrink();
+    //         RelationInfo *info = this->info_;
+    //         unsigned int key = info->key;
+    //         DataType *type = info->fields[key].type;
+    //         data.reorder(type, key);
+    //     }
+    //     bdn->relref();
+    // }
 
     kBuffer.releaseBuf(bd); // 释放buffer
     // 修改表头统计
