@@ -296,36 +296,47 @@ int Table::remove(unsigned int blkid, void *keybuf, unsigned int len)
 
     // 先确定删除位置
     unsigned short index = data.searchRecord(keybuf, len);
-    if (index < 0 || index >= data.getSlots()) { return ESRCH; }
+    if (index >= data.getSlots()) { return ESRCH; }
 
     data.deallocate(index);
 
     DataHeader *header = reinterpret_cast<MetaHeader *>(data.buffer_);
 
-    // if (header->freesize > BLOCK_SIZE / 2 && header->self !=
-    // super.getMaxid()) {
-    //     DataBlock next;
-    //     BufDesp *bdn = kBuffer.borrow(name_.c_str(), header->next);
-    //     next.attach(bdn->buffer);
-    //     next.setTable(this);
-    //     if (next.getFreeSize() > BLOCK_SIZE / 2) {
-    //         // 移动next记录到data上
-    //         while (next.getSlots() > 0) {
-    //             Record record;
-    //             next.refslots(0, record);
-    //             data.copyRecord(record);
-    //             next.deallocate(0);
-    //         }
-    //         data.setNext(next.getNext());
+    if (header->freesize > BLOCK_SIZE / 2 && header->next != 0) {
+        DataBlock next;
+        BufDesp *bdn = kBuffer.borrow(name_.c_str(), header->next);
+        next.attach(bdn->buffer);
+        next.setTable(this);
+        if (next.getFreeSize() > BLOCK_SIZE / 2) {
+            // 移动next记录到data上
+            while (next.getSlots() > 0) {
+                Record record;
+                next.refslots(0, record);
+                data.copyRecord(record);
+                next.deallocate(0);
+            }
+            data.setNext(next.getNext());
 
-    //         data.shrink();
-    //         RelationInfo *info = this->info_;
-    //         unsigned int key = info->key;
-    //         DataType *type = info->fields[key].type;
-    //         data.reorder(type, key);
-    //     }
-    //     bdn->relref();
-    // }
+            // data page最后重排
+            RelationInfo *info = this->info_;
+            unsigned int key = info->key;
+            DataType *type = info->fields[key].type;
+            data.reorder(type, key);
+
+            kBuffer.releaseBuf(bd); // 释放buffer
+            // 修改表头统计
+            bd = kBuffer.borrow(name_.c_str(), 0);
+            super.attach(bd->buffer);
+            next.setNext(super.getIdle());
+            super.setIdle(next.getSelf());
+            super.setIdleCounts(super.getIdleCounts() - 1);
+            super.setRecords(super.getRecords() - 1);
+            bd->relref();
+            bdn->relref();
+            return S_OK;
+        }
+        bdn->relref();
+    }
 
     kBuffer.releaseBuf(bd); // 释放buffer
     // 修改表头统计
