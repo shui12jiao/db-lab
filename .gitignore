@@ -1,6 +1,7 @@
 build/*
 include/db/config.h
 .vs/*
+.vscode/*
 CMakeSettings.json
 *.log
 *.fls
