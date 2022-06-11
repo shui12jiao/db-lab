@@ -6,8 +6,7 @@
 
 namespace db {
 
-#define M (4)
-static const unsigned int INV = 0;
+#define M (5)
 
 class Key
 {
@@ -49,14 +48,13 @@ class BNode
     }
 
     // block插入B+树中，仅插入key，对于内部节点，在函数外处理sons的插入
-    int insert(const Key key, DataType *type);
+    int insert(const Key key, DataType *type, BNode *who = nullptr);
     // B+树中移除block
     int remove(const Key key, DataType *type);
     //定位key在哪个block
     unsigned int search(const Key key, DataType *type) const;
     //分裂节点，返回分裂出的新节点指针
     BNode *split();
-    // BNode *splitAndInsert(const Key key, int index);
     //二分搜索至最后一个小于等于插入值的位置
     int binarySearch(const Key &key, DataType *type) const;
     //检测是否keys已满
@@ -86,18 +84,12 @@ class BTree
   private:
     void release(BNode *node)
     {
-        if (node != nullptr) {
-            for (int i = 0; i < M; i++) {
-                if (node->sons[i] != nullptr) {
-                    release(node->sons[i]);
-                    node->sons[i] = nullptr;
-                } else {
-                    break;
-                }
-            }
-            delete (node);
-            node = nullptr;
+        for (int i = 0; i <= M; i++) {
+            if (node->sons[i] == nullptr) { break; }
+            release(node->sons[i]);
         }
+        delete (node);
+        node = nullptr;
     }
 };
 
