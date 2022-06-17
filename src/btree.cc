@@ -34,69 +34,92 @@ bool Key::equal(const Key &key, DataType *type) const
                key.len);
 }
 
-int BNode::insert(const Key key, DataType *type, BNode *who)
+int BNode::insert(Key key, DataType *type, BNode *who)
 {
-    int i = this->binarySearch(key, type) + 1; // i表示key应当插入在keys中的位置
-    if (i != 0 && this->keys[i - 1].equal(key, type)) { return -1; }
-    if (this->isFull()) {
-        BNode *newNode = this->split(); // this分裂，右侧节点为newNode
-        if (i < (M / 2)) { //分裂后，key应当插入左侧this还是右侧newNode
-            i = this->insert(key, type);
-        } else {
-            i = newNode->insert(key, type); // i插入了右侧节点
-            if (who != nullptr) { who->parent = newNode; }
-        }
-        if (this->parent == nullptr) { // this是根节点，根节点分裂
-            BNode *newRoot = new BNode(false, nullptr); //构建新根节点
-            newRoot->keys[0] = newNode->keys[0];
-            newRoot->sons[0] = this;
-            newRoot->sons[1] = newNode;
-            this->parent = newRoot;
-            newNode->parent = newRoot;
-        } else { //非根节点分裂
-            //向父节点插入newNode的最小值，父节点可能发生分裂，子节点parent在split中更改
-            int idx = this->parent->insert(newNode->keys[0], type, newNode);
-            newNode->parent->sons[idx + 1] = newNode;
-        }
-    } else {
-        int j = M - 1;
-        while (this->keys[j].blkid == 0) {
-            j--;
-        }
-        while (j >= i) {
-            this->keys[j + 1] = this->keys[j];
-            if (!this->isLeaf) { this->sons[j + 2] = this->sons[j + 1]; }
-            j--;
-        }
-        this->keys[i] = key;
+    int idx =
+        this->binarySearch(key, type) + 1; // i表示key应当插入在keys中的位置
+    if (idx != 0 && this->keys[idx - 1].equal(key, type)) {
+        return -1; //重复值则返回-1
     }
-    return i;
+
+    if (this->isFull()) { // BNode已满，发生分裂
+        //产生newNode节点，暂时在this插入新值(来自该函数)
+        BNode *newNode = this->split(idx);
+        this->keys[idx] = key;
+        this->sons[idx + 1] = who;
+
+        int i = (M + 1) / 2; //右侧数量>=左侧
+        int j = 0;
+
+        // this节点右部移动至newNode，并向上插入新值(来自分裂)
+        if (this->isLeaf) { //叶子节点分裂
+            // this右部分key移动至newNode
+            for (; i < M + 1; i++, j++) {
+                newNode->keys[j] = this->keys[i];
+                this->keys[i].blkid = 0;
+            }
+
+            //向上插入新节点
+            if (newNode->parent == nullptr) { //该叶子节点是根节点
+                BNode *newRoot = new BNode(false, nullptr); //构建新根节点
+                newRoot->keys[0] = newNode->keys[0];
+                newRoot->sons[0] = this;
+                newRoot->sons[1] = newNode;
+                this->parent = newRoot;
+                newNode->parent = newRoot;
+            } else { //非根节点分裂
+                //向父节点插入newNode的最小值，父节点可能发生分裂，newNode->parent在split相关函数中可能更改(挂载到父节点的分裂节点上)
+                newNode->parent->insert(
+                    newNode->keys[0], type, newNode); //向上层非根节点插入
+            }
+        } else { //非叶子节点分裂，newNode需要抛去最小值
+            // 本来newNode第一个key向上插入，注意此时尚未移动this中keys，sons
+            if (newNode->parent == nullptr) { //该内部节点为根节点
+                BNode *newRoot = new BNode(false, nullptr); //构建新根节点
+                newRoot->keys[0] = this->keys[i];
+                newRoot->sons[0] = this;
+                newRoot->sons[1] = newNode;
+                this->parent = newRoot;
+                newNode->parent = newRoot;
+            } else { //非根节点分裂
+                //向父节点插入newNode的最小值，父节点可能发生分裂，newNode->parent在split相关函数中可能更改(挂载到父节点的分裂节点上)
+                newNode->parent->insert(
+                    this->keys[i], type, newNode); //向上层非根节点插入
+            }
+            this->keys[i++].blkid = 0;        //第一个值在this中去掉
+            newNode->sons[0] = this->sons[i]; //第一个的指针作为sons[0]
+            newNode->sons[0]->parent = newNode; //更改该子节点的parent
+            this->sons[i] = nullptr;
+
+            for (; i < M + 1; i++, j++) {
+                newNode->keys[j] = this->keys[i];
+                this->keys[i].blkid = 0;
+
+                newNode->sons[j + 1] = this->sons[i + 1];
+                newNode->sons[j + 1]->parent = newNode;
+                this->sons[i + 1] = nullptr;
+            }
+        }
+
+        if (idx >= (M + 1) / 2) { // key插入在newNode，index发生变化
+            idx = newNode->binarySearch(key, type);
+        }
+
+    } else {             //未发生分裂，直接插入
+        this->move(idx); // j=M-1
+        this->keys[idx] = key;
+        this->sons[idx + 1] = who;
+    }
+    return idx;
 }
 
-BNode *BNode::split()
+BNode *BNode::split(int index)
 { //搬运右部分到新的右侧节点
-    BNode *newNode = new BNode(this->isLeaf, this->parent);
-    int i = M / 2;
-    int j = 0;
+    // this节点暂时插入新节点
+    this->move(index, M); // j=M+1
 
-    this->keys[i++].blkid = 0; //第一个值去掉，指针作为sons[0]
-    if (!this->isLeaf) {
-        newNode->sons[0] = this->sons[i];
-        newNode->sons[0]->parent = newNode;
-        this->sons[i] = nullptr;
-    }
-    while (i < M) {
-        newNode->keys[j] = this->keys[i];
-        if (!this->isLeaf) {
-            newNode->sons[j + 1] = this->sons[i + 1];
-            newNode->sons[j + 1]->parent = newNode;
-            this->sons[i + 1] = nullptr;
-        }
-        this->keys[i].blkid = 0;
-        i++;
-        j++;
-    }
-    return newNode;
+    //分裂出的新节点
+    return new BNode(this->isLeaf, this->parent);
 }
 
 int BNode::remove(const Key key, DataType *type)
@@ -108,9 +131,23 @@ int BNode::remove(const Key key, DataType *type)
 
 unsigned int BNode::search(const Key key, DataType *type) const
 {
-    0;
-    0;
-    return 0;
+    int i = this->binarySearch(key, type);
+    if (i == -1) {
+        if (this->isLeaf) {
+            return 0;
+        } else {
+            return this->sons[i + 1]->search(key, type);
+        }
+    }
+
+    const Key searchKey = this->keys[i];
+    if (searchKey.blkid != 0 && searchKey.equal(key, type)) {
+        return searchKey.blkid;
+    } else if (this->isLeaf) {
+        return 0;
+    } else {
+        return this->sons[i + 1]->search(key, type);
+    }
 }
 
 //返回arr中小于key的第一个值的位置
