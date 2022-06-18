@@ -2,6 +2,7 @@
 
 namespace db {
 
+// key
 bool Key::less(const Key &key, DataType *type) const
 {
     return type->less(
@@ -34,6 +35,7 @@ bool Key::equal(const Key &key, DataType *type) const
                key.len);
 }
 
+// BNode
 int BNode::insert(Key key, DataType *type, BNode *who)
 {
     int idx =
@@ -132,19 +134,19 @@ int BNode::remove(const Key key, DataType *type)
 unsigned int BNode::search(const Key key, DataType *type) const
 {
     int i = this->binarySearch(key, type);
-    if (i == -1) {
+    if (i == -1) { //小于最小值
         if (this->isLeaf) {
-            return 0;
+            return 0; //无，返回blkid=0
         } else {
-            return this->sons[i + 1]->search(key, type);
+            return this->sons[0]->search(key, type); //查找最左侧子节点
         }
     }
 
     const Key searchKey = this->keys[i];
-    if (searchKey.blkid != 0 && searchKey.equal(key, type)) {
+    if (searchKey.blkid != 0 && searchKey.equal(key, type)) { //直接找到
         return searchKey.blkid;
     } else if (this->isLeaf) {
-        return 0;
+        return searchKey.blkid; //间接寻找(稀疏索引，只插入block的第一条记录)
     } else {
         return this->sons[i + 1]->search(key, type);
     }
@@ -170,7 +172,8 @@ int BNode::binarySearch(const Key &key, DataType *type) const
     return hi;
 }
 
-int BTree::Insert(unsigned int blkid, void *keybuf, unsigned int len)
+// BTree
+int BTree::insert(unsigned int blkid, void *keybuf, unsigned int len)
 {
     Key key = Key(blkid, keybuf, len);
 
@@ -185,6 +188,12 @@ int BTree::Insert(unsigned int blkid, void *keybuf, unsigned int len)
 
     if (root->parent != nullptr) { root = root->parent; }
     return ret;
+}
+
+unsigned int BTree::search(void *keybuf, unsigned int len) const
+{
+    Key key = Key(0, keybuf, len);
+    return root->search(key, this->type);
 }
 
 } // namespace db

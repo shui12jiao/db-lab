@@ -486,4 +486,59 @@ TEST_CASE("db/table.h")
 
         REQUIRE(!check(table));
     }
+
+    SECTION("search")
+    {
+        Table table;
+        table.open("table");
+        DataType *type = table.info_->fields[table.info_->key].type;
+
+        // 准备添加
+        std::vector<struct iovec> iov(3);
+        long long nid;
+        char phone[20];
+        char addr[128];
+
+        iov[0].iov_base = &nid;
+        iov[0].iov_len = 8;
+        iov[1].iov_base = phone;
+        iov[1].iov_len = 20;
+        iov[2].iov_base = (void *) addr;
+        iov[2].iov_len = 128;
+
+        std::vector<long long> nids;
+        std::vector<long long> blkids;
+        for (int i = 0; i < 80; ++i) {
+            nid = rand();
+            type->htobe(&nid);
+            nids.push_back(nid);
+            // locate位置
+            unsigned int blkid =
+                table.locate(iov[0].iov_base, (unsigned int) iov[0].iov_len);
+            blkids.push_back(blkid);
+            // 插入记录
+            int ret = table.insert(blkid, iov);
+            //if (ret == S_OK) ++count;
+        }
+
+        //修改添加的记录
+        for (std::vector<long long>::iterator it = nids.begin();
+             it != nids.end();
+             ++it) {
+            iov[0].iov_base = &*it;
+            unsigned int blkid =
+                table.locate(iov[0].iov_base, (unsigned int) iov[0].iov_len);
+            int ret = table.update(blkid, iov);
+            //if (ret != S_OK) --count; //修改失败
+        }
+
+        for (int i = 0; i < nids.size(); i++) {
+            iov[0].iov_base = &nids[i];
+            REQUIRE(
+                table.search(iov[0].iov_base, (unsigned int) iov[0].iov_len) ==
+                blkids[i]);
+        }
+
+        REQUIRE(!check(table));
+    }
 }

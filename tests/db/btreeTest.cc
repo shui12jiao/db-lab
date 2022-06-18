@@ -9,7 +9,8 @@ using namespace db;
 
 TEST_CASE("db/btree.h")
 {
-    SECTION("compare") {
+    SECTION("compare")
+    {
         DataType *type = findDataType("BIGINT");
         unsigned int len = 8;
         long long i1 = 2021;
@@ -37,7 +38,7 @@ TEST_CASE("db/btree.h")
         for (int i = 0; i < num; i++) {
             keys[i] = rand() % 50000;
             type->htobe(keys + i);
-            tree.Insert(1, keys + i, len);
+            tree.insert(1, keys + i, len);
         }
     }
 
@@ -56,19 +57,19 @@ TEST_CASE("db/btree.h")
         type->htobe(&i4);
         long long i6 = 37483801;
         type->htobe(&i6);
-        tree.Insert(11, &i1, len);
-        tree.Insert(22, &i2, len);
-        tree.Insert(33, &i3, len);
-        tree.Insert(44, &i4, len);
-        tree.Insert(66, &i6, len);
-        REQUIRE(tree.Search(&i1, len, type) == 11);
-        REQUIRE(tree.Search(&i2, len, type) == 22);
-        REQUIRE(tree.Search(&i3, len, type) == 33);
-        REQUIRE(tree.Search(&i4, len, type) == 44);
-        REQUIRE(tree.Search(&i6, len, type) == 66);
+        tree.insert(11, &i1, len);
+        tree.insert(22, &i2, len);
+        tree.insert(33, &i3, len);
+        tree.insert(44, &i4, len);
+        tree.insert(66, &i6, len);
+        REQUIRE(tree.search(&i1, len) == 11);
+        REQUIRE(tree.search(&i2, len) == 22);
+        REQUIRE(tree.search(&i3, len) == 33);
+        REQUIRE(tree.search(&i4, len) == 44);
+        REQUIRE(tree.search(&i6, len) == 66);
         long long i5 = 2025;
         type->htobe(&i5);
-        REQUIRE(tree.Search(&i5, len, type) == 0);
+        REQUIRE(tree.search(&i5, len) == 0);
     }
 
     SECTION("search2")
@@ -86,19 +87,20 @@ TEST_CASE("db/btree.h")
         }
         std::random_shuffle(keys, keys + num);
         for (int i = 0; i < num; i++) {
-            tree.Insert(i + 1, keys + i, len);
+            tree.insert(i + 1, keys + i, len);
         }
 
         long long i1 = keys[1];
         long long i2 = keys[2];
         long long i3 = keys[3];
 
-        REQUIRE(tree.Search(&i1, len, type) == 2);
-        REQUIRE(tree.Search(&i2, len, type) == 3);
-        REQUIRE(tree.Search(&i3, len, type) == 4);
+        REQUIRE(tree.search(&i1, len) == 2);
+        REQUIRE(tree.search(&i2, len) == 3);
+        REQUIRE(tree.search(&i3, len) == 4);
 
-        long long i4 = 4;
+        type->htobe(&i3);
+        long long i4 = i3 + 1; //比i3大，树中不存在
         type->htobe(&i4);
-        REQUIRE(tree.Search(&i4, len, type) == 0);
+        REQUIRE(tree.search(&i4, len) == 4);
     }
 }

@@ -7,6 +7,7 @@
 // @email niexiaowen@uestc.edu.cn
 //
 #include <db/table.h>
+#include <db/btree.h>
 
 namespace db {
 
@@ -73,6 +74,9 @@ int Table::open(const char *name)
     SuperBlock super;
     BufDesp *desp = kBuffer.borrow(name, 0);
     super.attach(desp->buffer);
+
+    //设置DataType
+    super.getTree()->type = info_->fields[info_->key].type;
 
     // 获取元数据
     maxid_ = super.getMaxid();
@@ -367,7 +371,14 @@ int Table::update(unsigned int blkid, std::vector<struct iovec> &iov)
 }
 
 // btree搜索
-// unsigned int Table::search(void *keybuf, unsigned int len) {}
+unsigned int Table::search(void *keybuf, unsigned int len)
+{
+    BufDesp *bd = kBuffer.borrow(name_.c_str(), 0);
+    SuperBlock super;
+    super.attach(bd->buffer);
+    BTree *tree = super.getTree();
+    return tree->search(keybuf, len);
+}
 
 size_t Table::recordCount()
 {

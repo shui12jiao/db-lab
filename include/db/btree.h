@@ -6,7 +6,7 @@
 
 namespace db {
 
-#define M (5)
+#define M (50)
 
 class Key
 {
@@ -86,16 +86,11 @@ class BTree
     }
     ~BTree() { release(root); }
 
-    int Insert(unsigned int blkid, void *keybuf, unsigned int len);
+    int insert(unsigned int blkid, void *keybuf, unsigned int len);
 
-    int Remove(unsigned int blkid, void *keybuf, unsigned int len);
+    int remove(unsigned int blkid, void *keybuf, unsigned int len);
 
-    unsigned int Search(void *keybuf, unsigned int len, DataType *type)
-    {
-        if (this->type != type) { return 0;}
-        Key key = Key(0, keybuf, len);
-        return root->search(key, type);
-    }
+    unsigned int search(void *keybuf, unsigned int len) const;
 
   private:
     void release(BNode *node)

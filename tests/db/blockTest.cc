@@ -22,8 +22,8 @@ TEST_CASE("db/block.h")
         REQUIRE(sizeof(Trailer) == 2 * sizeof(int));
         REQUIRE(sizeof(Trailer) % 8 == 0);
         REQUIRE(
-            sizeof(SuperHeader) ==
-            sizeof(CommonHeader) + sizeof(TimeStamp) + 9 * sizeof(int));
+            sizeof(SuperHeader) == sizeof(CommonHeader) + sizeof(TimeStamp) +
+                                       9 * sizeof(int) + 2 * sizeof(BTree *));
         REQUIRE(sizeof(SuperHeader) % 8 == 0);
         REQUIRE(sizeof(IdleHeader) == sizeof(CommonHeader) + sizeof(int));
         REQUIRE(sizeof(IdleHeader) % 8 == 0);

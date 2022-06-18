@@ -35,6 +35,7 @@
 #include "./record.h"
 #include "./schema.h"
 #include "./datatype.h"
+#include "./btree.h"
 
 namespace db {
 
@@ -81,6 +82,7 @@ struct Trailer
 // 超块头部
 struct SuperHeader : CommonHeader
 {
+    BTree *tree;             // B+树(8B*2(内存对齐))
     unsigned int first;      // 第1个数据块(4B)
     long long stamp;         // 时戳(8B)
     unsigned int idle;       // 空闲块(4B)
@@ -187,6 +189,18 @@ class SuperBlock : public Block
     // 清超块
     void clear(unsigned short spaceid);
 
+    // 获取B+树索引
+    inline BTree *getTree()
+    {
+        SuperHeader *header = reinterpret_cast<SuperHeader *>(buffer_);
+        return header->tree;
+    }
+    // 设定B+树索引
+    inline void setTree(BTree *tree)
+    {
+        SuperHeader *header = reinterpret_cast<SuperHeader *>(buffer_);
+        header->tree = tree;
+    }
     // 获取第1个数据块
     inline unsigned int getFirst()
     {

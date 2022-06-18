@@ -118,6 +118,8 @@ void SuperBlock::clear(unsigned short spaceid)
     // 清buffer
     ::memset(buffer_, 0, SUPER_SIZE);
     SuperHeader *header = reinterpret_cast<SuperHeader *>(buffer_);
+    // 删除原B+树索引
+    delete header->tree;
 
     // 设置magic number
     header->magic = MAGIC_NUMBER;
@@ -127,6 +129,8 @@ void SuperBlock::clear(unsigned short spaceid)
     setType(BLOCK_TYPE_SUPER);
     // 设定时戳
     setTimeStamp();
+    //设定B+树索引
+    setTree(new BTree(nullptr));
     // 设定数据块
     setFirst(0);
     // 设定maxid
