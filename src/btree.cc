@@ -124,11 +124,75 @@ BNode *BNode::split(int index)
     return new BNode(this->isLeaf, this->parent);
 }
 
-int BNode::remove(const Key key, DataType *type)
+//int BNode::remove(const Key key, DataType *type)
+//{
+//    int i = this->binarySearch(key, type);
+//    if (i == -1) { //小于最小值
+//        if (this->isLeaf) {
+//            return false; //无，返回false
+//        } else {
+//            return this->sons[0]->remove(key, type);
+//        }
+//    }
+//
+//    Key *searchKey = &this->keys[i];
+//    if (searchKey->blkid != 0 && searchKey->equal(key, type)) { //直接找到
+//        if (this->isLeaf) { 
+//            this->move(i, M - 1, false);
+//            return true;
+//        } else {
+//            if (this->sons[i + 1]->keys[1].blkid == 0) {//
+//
+//            }
+//        }
+//
+//
+//
+//        if (searchKey->blkid == key.blkid) {                    //不用修改
+//            return true;
+//        }
+//        searchKey->blkid = key.blkid;
+//        if (!this->isLeaf) { //继续向下修改
+//            this->sons[i + 1]->update(key, type);
+//        }
+//        
+//
+//
+//
+//    } else if (this->isLeaf) {
+//        return true; //不存在，返回true
+//    } else {
+//        return this->sons[i + 1]->remove(key, type);
+//    }
+//
+//}
+
+bool BNode::update(const Key key, DataType *type)
 {
-    0;
-    0;
-    return 0;
+    int i = this->binarySearch(key, type);
+    if (i == -1) { //小于最小值
+        if (this->isLeaf) {
+            return false; //无，返回false
+        } else {
+            return this->sons[0]->update(key, type); //最左侧子节点进行查找
+        }
+    }
+
+    Key *searchKey = &this->keys[i];
+    if (searchKey->blkid != 0 && searchKey->equal(key, type)) { //直接找到
+        if (searchKey->blkid == key.blkid) {//不用修改
+            return true;
+        }
+        searchKey->blkid = key.blkid;
+        if (!this->isLeaf) { //继续向下修改
+            this->sons[i + 1]->update(key, type);
+        }
+        return true;
+    } else if (this->isLeaf) {
+        return false; //没有找到
+    } else {
+        return this->sons[i + 1]->update(key, type);
+    }
 }
 
 unsigned int BNode::search(const Key key, DataType *type) const
@@ -163,7 +227,7 @@ int BNode::binarySearch(const Key &key, DataType *type) const
         int mid = (hi + lo) / 2;
         if (key.less(this->keys[mid], type)) {
             hi = mid - 1;
-        } else if (this->keys[mid].less(key, type)) {
+        } else if (key.more(this->keys[mid], type)) {
             lo = mid + 1;
         } else {
             return mid;
@@ -188,6 +252,13 @@ int BTree::insert(unsigned int blkid, void *keybuf, unsigned int len)
 
     if (root->parent != nullptr) { root = root->parent; }
     return ret;
+}
+
+bool BTree::update(unsigned int blkid, void *keybuf, unsigned int len)
+{
+    if (len != this->root->keys[0].len) { return false; }
+    Key key = Key(blkid, keybuf, len);
+    return root->update(key, this->type);
 }
 
 unsigned int BTree::search(void *keybuf, unsigned int len) const

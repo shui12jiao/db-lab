@@ -51,6 +51,8 @@ class BNode
     int insert(const Key key, DataType *type, BNode *who = nullptr);
     // B+树中移除block
     int remove(const Key key, DataType *type);
+    // 修改B+树中节点blkid
+    bool update(const Key key, DataType *type);
     //定位key在哪个block
     unsigned int search(const Key key, DataType *type) const;
     //分裂节点，返回分裂出的新节点指针
@@ -60,14 +62,24 @@ class BNode
     //检测是否keys已满
     bool isFull() const { return this->keys[M - 1].blkid != 0; }
     //插入点i后至j移动
-    void move(int i, int j = M - 1)
+    void move(int i, int j = M - 1, bool right = true)
     {
         while (this->keys[j].blkid == 0) {
             j--;
         }
-        for (; j >= i; j--) {
-            this->keys[j + 1] = this->keys[j];
-            if (!this->isLeaf) { this->sons[j + 2] = this->sons[j + 1]; }
+        if (right) {
+            for (; j >= i; j--) {
+                this->keys[j + 1] = this->keys[j];
+                if (!this->isLeaf) { this->sons[j + 2] = this->sons[j + 1]; }
+            }
+        } else {
+            int rm = j;
+            for (; j > i; j--) {
+                this->keys[j - 1] = this->keys[j];
+                if (!this->isLeaf) { this->sons[j] = this->sons[j + 1]; }
+            }
+            this->keys[rm] = Key();
+            if (!this->isLeaf) { this->sons[rm + 1] = nullptr; }
         }
     }
 };
@@ -86,10 +98,13 @@ class BTree
     }
     ~BTree() { release(root); }
 
+    //添加记录
     int insert(unsigned int blkid, void *keybuf, unsigned int len);
-
+    //移除记录(未实现)
     int remove(unsigned int blkid, void *keybuf, unsigned int len);
-
+    //更改记录blkid
+    bool update(unsigned int blkid, void *keybuf, unsigned int len);
+    //定位记录位置
     unsigned int search(void *keybuf, unsigned int len) const;
 
   private:

@@ -76,7 +76,8 @@ int Table::open(const char *name)
     super.attach(desp->buffer);
 
     //设置DataType
-    super.getTree()->type = info_->fields[info_->key].type;
+    BTree *tree = super.getTree();
+    tree->type = info_->fields[info_->key].type;
 
     // 获取元数据
     maxid_ = super.getMaxid();
@@ -235,9 +236,14 @@ int Table::insert(unsigned int blkid, std::vector<struct iovec> &iov)
     SuperBlock super;
     data.setTable(this);
 
+    Record record;
+    unsigned char *pkey;
+    unsigned int klen;
+
     // 从buffer中借用
     BufDesp *bd = kBuffer.borrow(name_.c_str(), blkid);
     data.attach(bd->buffer);
+
     // 尝试插入
     std::pair<bool, unsigned short> ret = data.insertRecord(iov);
     if (ret.first) {
@@ -246,6 +252,15 @@ int Table::insert(unsigned int blkid, std::vector<struct iovec> &iov)
         bd = kBuffer.borrow(name_.c_str(), 0);
         super.attach(bd->buffer);
         super.setRecords(super.getRecords() + 1);
+
+        //插入索引
+        data.refslots(0, record);
+        record.refByIndex(&pkey, &klen, 0);
+        BTree *tree = super.getTree();
+        if (tree->insert(blkid, pkey, klen) == -1) { //重复，则update
+            tree->update(blkid, pkey, klen);
+        }
+
         bd->relref();
         return S_OK; // 插入成功
     } else if (ret.second == (unsigned short) -1) {
@@ -264,13 +279,27 @@ int Table::insert(unsigned int blkid, std::vector<struct iovec> &iov)
     BufDesp *bd2 = kBuffer.borrow(name_.c_str(), blkid);
     next.attach(bd2->buffer);
 
+    //获取索引树
+    BufDesp *bds = kBuffer.borrow(name_.c_str(), 0);
+    super.attach(bds->buffer);
+    BTree *tree = super.getTree();
+
     // 移动记录到新的block上
     while (data.getSlots() > split_position.first) {
         Record record;
         data.refslots(split_position.first, record);
+
+        //修改索引
+        record.refByIndex(&pkey, &klen, 0);
+        tree->update(next.getSelf(), pkey, klen);
+
         next.copyRecord(record);
         data.deallocate(split_position.first);
+
+        
     }
+    bds->relref();
+
     // 插入新记录，不需要再重排顺序
     if (split_position.second)
         data.insertRecord(iov);
@@ -279,10 +308,20 @@ int Table::insert(unsigned int blkid, std::vector<struct iovec> &iov)
     // 维持数据链
     next.setNext(data.getNext());
     data.setNext(next.getSelf());
-    bd2->relref();
 
+    // bd关联super
     bd = kBuffer.borrow(name_.c_str(), 0);
     super.attach(bd->buffer);
+
+    //获取并修改新block首条记录的blkid
+    next.refslots(0, record);
+    record.refByIndex(&pkey, &klen, 0);
+    if (tree->insert(next.getSelf(), pkey, klen) == -1) { //重复，则update
+        tree->update(next.getSelf(), pkey, klen);
+    }
+
+    bd2->relref();
+
     super.setRecords(super.getRecords() + 1);
     bd->relref();
     return S_OK;
@@ -293,6 +332,10 @@ int Table::remove(unsigned int blkid, void *keybuf, unsigned int len)
     DataBlock data;
     SuperBlock super;
     data.setTable(this);
+
+    Record record;
+    unsigned char *pkey;
+    unsigned int klen;
 
     // 从buffer中借用
     BufDesp *bd = kBuffer.borrow(name_.c_str(), blkid);
@@ -306,20 +349,39 @@ int Table::remove(unsigned int blkid, void *keybuf, unsigned int len)
 
     DataHeader *header = reinterpret_cast<MetaHeader *>(data.buffer_);
 
+    // next block合并至该block
     if (header->freesize > BLOCK_SIZE / 2 && header->next != 0) {
         DataBlock next;
         BufDesp *bdn = kBuffer.borrow(name_.c_str(), header->next);
         next.attach(bdn->buffer);
         next.setTable(this);
         if (next.getFreeSize() > BLOCK_SIZE / 2) {
+            //获取索引树
+            BufDesp *bds = kBuffer.borrow(name_.c_str(), 0);
+            super.attach(bds->buffer);
+            BTree *tree = super.getTree();
+            
+
             // 移动next记录到data上
             while (next.getSlots() > 0) {
-                Record record;
                 next.refslots(0, record);
+
+                //修改索引
+                record.refByIndex(&pkey, &klen, 0);
+                tree->update(blkid, pkey, klen);
+
                 data.copyRecord(record);
-                next.deallocate(0);
+                next.deallocate(0);              
             }
             data.setNext(next.getNext());
+
+            //获取并修改新block首条记录的blkid
+            data.refslots(0, record);
+            record.refByIndex(&pkey, &klen, 0);
+            if (tree->insert(blkid, pkey, klen) == -1) { //重复，则update
+                tree->update(blkid, pkey, klen);
+            }
+            bds->relref();
 
             // data page最后重排
             RelationInfo *info = this->info_;
@@ -335,6 +397,7 @@ int Table::remove(unsigned int blkid, void *keybuf, unsigned int len)
             super.setIdle(next.getSelf());
             super.setIdleCounts(super.getIdleCounts() - 1);
             super.setRecords(super.getRecords() - 1);
+
             bd->relref();
             bdn->relref();
             return S_OK;
@@ -343,10 +406,20 @@ int Table::remove(unsigned int blkid, void *keybuf, unsigned int len)
     }
 
     kBuffer.releaseBuf(bd); // 释放buffer
+    
     // 修改表头统计
     bd = kBuffer.borrow(name_.c_str(), 0);
     super.attach(bd->buffer);
     super.setRecords(super.getRecords() - 1);
+
+    //获取并修改新block首条记录的blkid
+    BTree *tree = super.getTree();
+    data.refslots(0, record);
+    record.refByIndex(&pkey, &klen, 0);
+    if (tree->insert(blkid, pkey, klen) == -1) { //重复，则update
+        tree->update(blkid, pkey, klen);
+    }
+
     bd->relref();
 
     return S_OK; // 删除成功
@@ -365,6 +438,24 @@ int Table::update(unsigned int blkid, std::vector<struct iovec> &iov)
     bool success = data.updateRecord(iov);
 
     kBuffer.releaseBuf(bd);
+
+    //bd关联super
+    bd = kBuffer.borrow(name_.c_str(), 0);
+    super.attach(bd->buffer);
+    BTree *tree = super.getTree();
+
+    Record record;
+    unsigned char *pkey;
+    unsigned int klen;
+
+    //插入索引
+    data.refslots(0, record);
+    record.refByIndex(&pkey, &klen, 0);
+    if (tree->insert(blkid, pkey, klen) == -1) { //重复，则update
+        tree->update(blkid, pkey, klen);
+    }
+
+    bd->relref();
 
     if (!success) { return S_FALSE; }
     return S_OK;

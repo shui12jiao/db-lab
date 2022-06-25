@@ -507,36 +507,32 @@ TEST_CASE("db/table.h")
         iov[2].iov_len = 128;
 
         std::vector<long long> nids;
-        std::vector<long long> blkids;
-        for (int i = 0; i < 80; ++i) {
+        for (int i = 0; i < 15000; ++i) {
             nid = rand();
             type->htobe(&nid);
             nids.push_back(nid);
             // locate位置
             unsigned int blkid =
                 table.locate(iov[0].iov_base, (unsigned int) iov[0].iov_len);
-            blkids.push_back(blkid);
             // 插入记录
-            int ret = table.insert(blkid, iov);
-            //if (ret == S_OK) ++count;
+            table.insert(blkid, iov);
         }
 
         //修改添加的记录
-        for (std::vector<long long>::iterator it = nids.begin();
+        /*for (std::vector<long long>::iterator it = nids.begin();
              it != nids.end();
              ++it) {
             iov[0].iov_base = &*it;
             unsigned int blkid =
                 table.locate(iov[0].iov_base, (unsigned int) iov[0].iov_len);
             int ret = table.update(blkid, iov);
-            //if (ret != S_OK) --count; //修改失败
-        }
+        }*/
 
         for (int i = 0; i < nids.size(); i++) {
             iov[0].iov_base = &nids[i];
             REQUIRE(
                 table.search(iov[0].iov_base, (unsigned int) iov[0].iov_len) ==
-                blkids[i]);
+                table.locate(iov[0].iov_base, (unsigned int) iov[0].iov_len));
         }
 
         REQUIRE(!check(table));
